@@ -16,8 +16,8 @@ const SEGMENT_RADIUS = 10;
 const FOOD_COUNT = 1200;
 const BOT_COUNT = 20;
 const TICK_RATE = 30; // ms per server tick (33fps)
-const BOOST_DRAIN = 0.15;
-const BOOST_REGEN = 0.12;
+const BOOST_DRAIN = 15;
+const BOOST_REGEN = 12;
 const HIT_DIST = (SEGMENT_RADIUS * 1.5) ** 2;
 const FOOD_CHECK_DIST = (SEGMENT_RADIUS + 8) ** 2;
 
