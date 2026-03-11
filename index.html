@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SLITHER</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#050a0f; overflow:hidden; font-family:'Share Tech Mono',monospace; color:#00ff88; }
+  #gameCanvas { display:block; cursor:none; }
+
+  #score-panel {
+    position:fixed; top:20px; left:20px;
+    background:rgba(0,255,136,0.05); border:1px solid rgba(0,255,136,0.3);
+    border-radius:4px; padding:12px 20px; backdrop-filter:blur(10px);
+  }
+  #score-label { font-family:'Orbitron',sans-serif; font-size:10px; letter-spacing:3px; color:rgba(0,255,136,0.5); text-transform:uppercase; }
+  #score-value { font-family:'Orbitron',sans-serif; font-size:28px; font-weight:900; color:#00ff88; text-shadow:0 0 20px #00ff88; line-height:1; margin-top:4px; }
+
+  #leaderboard {
+    position:fixed; top:20px; right:20px; width:200px;
+    background:rgba(0,0,0,0.7); border:1px solid rgba(255,255,255,0.1);
+    border-radius:8px; padding:12px; backdrop-filter:blur(10px);
+  }
+  #leaderboard h3 { font-family:'Orbitron',sans-serif; font-size:11px; letter-spacing:2px; color:rgba(255,255,255,0.4); text-transform:uppercase; margin-bottom:10px; text-align:center; }
+  .lb-entry { display:flex; align-items:center; padding:4px 0; font-size:12px; border-bottom:1px solid rgba(255,255,255,0.05); }
+  .lb-rank { width:20px; color:rgba(255,255,255,0.3); font-size:10px; }
+  .lb-name { flex:1; color:rgba(255,255,255,0.7); }
+  .lb-score { color:#00ff88; font-size:11px; }
+  .lb-entry.me .lb-name { color:#00ff88; font-weight:bold; }
+  .lb-entry.me .lb-score { color:#ffdd00; }
+
+  #overlay {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:rgba(5,10,15,0.92); z-index:100; backdrop-filter:blur(4px); pointer-events:all;
+  }
+  #overlay h1 {
+    font-family:'Orbitron',sans-serif; font-size:clamp(36px,6vw,72px); font-weight:900;
+    letter-spacing:8px; background:linear-gradient(135deg,#00ff88,#00c8ff);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+    filter:drop-shadow(0 0 30px rgba(0,255,136,0.5)); margin-bottom:8px;
+  }
+  .subtitle { font-size:13px; letter-spacing:4px; color:rgba(255,255,255,0.3); margin-bottom:40px; text-transform:uppercase; }
+
+  .server-input-wrapper { margin-bottom:16px; width:320px; }
+  .server-input-wrapper label { display:block; font-size:11px; letter-spacing:3px; color:rgba(0,255,136,0.5); margin-bottom:6px; text-transform:uppercase; }
+  .server-input-wrapper input {
+    background:rgba(0,255,136,0.05); border:1px solid rgba(0,255,136,0.4); color:#00ff88;
+    font-family:'Share Tech Mono',sans-serif; font-size:13px; padding:10px 14px; border-radius:4px;
+    outline:none; width:100%; transition:border-color 0.3s;
+  }
+  .server-input-wrapper input:focus { border-color:#00ff88; box-shadow:0 0 12px rgba(0,255,136,0.2); }
+
+  #name-input-wrapper { margin-bottom:20px; }
+  #name-input-wrapper label { display:block; font-size:11px; letter-spacing:3px; color:rgba(0,255,136,0.5); margin-bottom:8px; text-transform:uppercase; }
+  #player-name {
+    background:rgba(0,255,136,0.05); border:1px solid rgba(0,255,136,0.4); color:#00ff88;
+    font-family:'Orbitron',sans-serif; font-size:18px; padding:12px 24px; border-radius:4px;
+    outline:none; text-align:center; width:280px; transition:border-color 0.3s;
+  }
+  #player-name:focus { border-color:#00ff88; box-shadow:0 0 20px rgba(0,255,136,0.2); }
+
+  .color-picker-row { display:flex; gap:12px; margin-bottom:16px; align-items:center; }
+  .color-picker-row span { font-size:11px; letter-spacing:2px; color:rgba(255,255,255,0.3); text-transform:uppercase; }
+  .color-dot { width:30px; height:30px; border-radius:50%; cursor:pointer; border:2px solid transparent; transition:transform 0.2s,border-color 0.2s; }
+  .color-dot:hover { transform:scale(1.2); }
+  .color-dot.selected { border-color:white; transform:scale(1.2); }
+
+  .control-picker-row { display:flex; gap:12px; margin-bottom:28px; align-items:center; }
+  .control-picker-row span { font-size:11px; letter-spacing:2px; color:rgba(255,255,255,0.3); text-transform:uppercase; }
+  .ctrl-btn { padding:8px 20px; border:1px solid rgba(0,255,136,0.3); border-radius:4px; color:rgba(255,255,255,0.4); font-family:'Orbitron',sans-serif; font-size:12px; cursor:pointer; transition:all 0.2s; background:rgba(0,255,136,0.03); }
+  .ctrl-btn:hover { border-color:rgba(0,255,136,0.6); color:rgba(255,255,255,0.8); }
+  .ctrl-btn.selected { border-color:#00ff88; color:#00ff88; background:rgba(0,255,136,0.1); box-shadow:0 0 12px rgba(0,255,136,0.2); }
+
+  #start-btn {
+    font-family:'Orbitron',sans-serif; font-size:16px; font-weight:700; letter-spacing:4px;
+    color:#050a0f; background:linear-gradient(135deg,#00ff88,#00c8ff); border:none;
+    padding:16px 48px; border-radius:4px; cursor:pointer; text-transform:uppercase;
+    transition:transform 0.2s,box-shadow 0.2s; pointer-events:all;
+  }
+  #start-btn:hover { transform:scale(1.05); box-shadow:0 0 40px rgba(0,255,136,0.4); }
+
+  #status-bar {
+    position:fixed; bottom:50px; left:50%; transform:translateX(-50%);
+    font-size:12px; letter-spacing:2px; color:rgba(255,200,0,0.7); text-transform:uppercase;
+    text-align:center; pointer-events:none;
+  }
+
+  #death-overlay {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    display:none; flex-direction:column; align-items:center; justify-content:center;
+    background:rgba(5,10,15,0.88); z-index:100; backdrop-filter:blur(4px); pointer-events:all;
+  }
+  #death-overlay.show { display:flex; }
+  #death-overlay h2 { font-family:'Orbitron',sans-serif; font-size:clamp(28px,5vw,52px); font-weight:900; letter-spacing:6px; color:#ff4466; text-shadow:0 0 40px rgba(255,68,102,0.6); margin-bottom:10px; animation:flashIn 0.4s ease-out; }
+  #death-score { font-family:'Orbitron',sans-serif; font-size:18px; color:rgba(255,255,255,0.5); margin-bottom:30px; }
+  #death-score span { color:#00ff88; font-weight:700; font-size:24px; }
+  #restart-btn { font-family:'Orbitron',sans-serif; font-size:14px; font-weight:700; letter-spacing:4px; color:#050a0f; background:linear-gradient(135deg,#ff4466,#ff8844); border:none; padding:14px 42px; border-radius:4px; cursor:pointer; text-transform:uppercase; transition:transform 0.2s,box-shadow 0.2s; }
+  #restart-btn:hover { transform:scale(1.05); box-shadow:0 0 30px rgba(255,68,102,0.4); }
+
+  #controls-hint { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); font-size:11px; letter-spacing:2px; color:rgba(255,255,255,0.2); text-align:center; text-transform:uppercase; }
+  .boost-indicator { position:fixed; bottom:60px; right:20px; font-family:'Orbitron',sans-serif; font-size:11px; letter-spacing:2px; color:rgba(255,200,0,0.6); text-transform:uppercase; }
+
+  @keyframes flashIn { from{transform:scale(0.5);opacity:0} to{transform:scale(1);opacity:1} }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+
+<div id="score-panel">
+  <div id="score-label">Länge</div>
+  <div id="score-value">0</div>
+</div>
+
+<div id="leaderboard">
+  <h3>Bestenliste</h3>
+  <div id="lb-list"></div>
+</div>
+
+<div id="status-bar"></div>
+<div id="controls-hint">Maus = Steuern &nbsp;|&nbsp; Linksklick / Leertaste = Boost</div>
+<div class="boost-indicator" id="boost-ind">BOOST BEREIT</div>
+
+<div id="overlay">
+  <h1>SLITHER</h1>
+  <div class="subtitle">Multiplayer</div>
+
+  <div class="server-input-wrapper">
+    <label>Server URL (Railway)</label>
+    <input type="text" id="server-url" placeholder="https://dein-server.railway.app" value="">
+  </div>
+
+  <div id="name-input-wrapper">
+    <label>Dein Name</label>
+    <input type="text" id="player-name" placeholder="Spieler" maxlength="14" value="Spieler">
+  </div>
+
+  <div class="color-picker-row">
+    <span>Farbe</span>
+    <div class="color-dot selected" style="background:#00ff88" data-color="#00ff88,#006633"></div>
+    <div class="color-dot" style="background:#00c8ff" data-color="#00c8ff,#004466"></div>
+    <div class="color-dot" style="background:#ff4466" data-color="#ff4466,#660022"></div>
+    <div class="color-dot" style="background:#ffdd00" data-color="#ffdd00,#665500"></div>
+    <div class="color-dot" style="background:#ff8844" data-color="#ff8844,#662211"></div>
+    <div class="color-dot" style="background:#cc44ff" data-color="#cc44ff,#440066"></div>
+  </div>
+
+  <div class="control-picker-row">
+    <span>Steuerung</span>
+    <div class="ctrl-btn selected" id="ctrl-mouse" onclick="selectControl('mouse')">🖱 Maus</div>
+    <div class="ctrl-btn" id="ctrl-wasd" onclick="selectControl('wasd')">⌨ WASD</div>
+  </div>
+
+  <button id="start-btn">SPIELEN</button>
+</div>
+
+<div id="death-overlay">
+  <h2>GAME OVER</h2>
+  <div id="death-score">Länge: <span id="ds">0</span></div>
+  <button id="restart-btn">NOCHMAL</button>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
+
+// ---- CONFIG ----
+const WORLD_W = 4000, WORLD_H = 4000;
+const SEGMENT_RADIUS = 10;
+
+// ---- STATE ----
+let socket = null;
+let selfState = null;
+let others = [];
+let foods = [];
+let leaderboard = [];
+let camera = { x: 0, y: 0 };
+let zoom = 1.0;
+let gameRunning = false;
+let animId;
+let frameCount = 0;
+
+let mouseX = canvas.width/2, mouseY = canvas.height/2;
+let boosting = false;
+let playerColor = '#00ff88', playerColorDark = '#006633';
+let playerName = 'Spieler';
+let controlMode = 'mouse';
+const wasd = { w:false, a:false, s:false, d:false };
+
+// ---- COLOR PICKER ----
+document.querySelectorAll('.color-dot').forEach(dot => {
+  dot.addEventListener('click', () => {
+    document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
+    dot.classList.add('selected');
+    const [c1,c2] = dot.dataset.color.split(',');
+    playerColor = c1; playerColorDark = c2;
+  });
+});
+
+function selectControl(mode) {
+  controlMode = mode;
+  document.getElementById('ctrl-mouse').classList.toggle('selected', mode==='mouse');
+  document.getElementById('ctrl-wasd').classList.toggle('selected', mode==='wasd');
+  document.getElementById('controls-hint').textContent =
+    mode==='wasd' ? 'W/A/S/D = Steuern  |  Leertaste = Boost' : 'Maus = Steuern  |  Linksklick / Leertaste = Boost';
+}
+
+// ---- CONTROLS ----
+canvas.addEventListener('mousemove', e => { mouseX=e.clientX; mouseY=e.clientY; });
+canvas.addEventListener('mousedown', e => { if(e.button===0) boosting=true; });
+canvas.addEventListener('mouseup', e => { if(e.button===0) boosting=false; });
+window.addEventListener('keydown', e => {
+  if(e.code==='Space'){boosting=true;e.preventDefault();}
+  if(e.code==='KeyW') wasd.w=true;
+  if(e.code==='KeyA') wasd.a=true;
+  if(e.code==='KeyS') wasd.s=true;
+  if(e.code==='KeyD') wasd.d=true;
+});
+window.addEventListener('keyup', e => {
+  if(e.code==='Space') boosting=false;
+  if(e.code==='KeyW') wasd.w=false;
+  if(e.code==='KeyA') wasd.a=false;
+  if(e.code==='KeyS') wasd.s=false;
+  if(e.code==='KeyD') wasd.d=false;
+});
+
+// ---- SOCKET ----
+function connect(serverUrl, name, color, colorDark) {
+  if (socket) socket.disconnect();
+
+  setStatus('Verbinde...');
+  socket = io(serverUrl, { transports: ['websocket', 'polling'] });
+
+  socket.on('connect', () => {
+    setStatus('Verbunden! Trete bei...');
+    socket.emit('join', { name, color, colorDark });
+  });
+
+  socket.on('init', ({ worldW, worldH }) => {
+    setStatus('');
+    gameRunning = true;
+    document.getElementById('overlay').style.display = 'none';
+  });
+
+  socket.on('state', (data) => {
+    // Decompress segments from [x,y] arrays to {x,y} objects
+    if (data.s && data.s.al) {
+      selfState = {
+        alive: true,
+        segments: data.s.segs.map(sg => ({ x: sg[0], y: sg[1] })),
+        angle: data.s.a,
+        boostEnergy: data.s.be,
+        score: data.s.sc,
+      };
+    } else {
+      selfState = { alive: false };
+    }
+
+    others = (data.o || []).map(o => ({
+      segments: o.segs.map(sg => ({ x: sg[0], y: sg[1] })),
+      angle: o.a,
+      color: o.c,
+      colorDark: o.cd,
+      name: o.n,
+      length: o.l,
+    }));
+
+    foods = (data.f || []).map(f => ({ id: f.id, x: f.x, y: f.y, r: f.r, color: f.c }));
+    leaderboard = data.lb || [];
+
+    if (selfState.alive && selfState.segments.length > 0) {
+      const head = selfState.segments[0];
+      const tx = head.x - canvas.width/(2*zoom);
+      const ty = head.y - canvas.height/(2*zoom);
+      camera.x += (tx - camera.x) * 0.3;
+      camera.y += (ty - camera.y) * 0.3;
+    }
+  });
+
+  socket.on('died', ({ score }) => {
+    document.getElementById('ds').textContent = score;
+    document.getElementById('death-overlay').classList.add('show');
+    gameRunning = false;
+  });
+
+  socket.on('connect_error', () => setStatus('❌ Verbindung fehlgeschlagen'));
+  socket.on('disconnect', () => setStatus('Verbindung getrennt'));
+
+  // Send input at ~30fps
+  setInterval(() => {
+    if (!socket || !gameRunning) return;
+    let angle;
+    if (controlMode === 'wasd') {
+      const dx = (wasd.d?1:0)-(wasd.a?1:0);
+      const dy = (wasd.s?1:0)-(wasd.w?1:0);
+      angle = (dx||dy) ? Math.atan2(dy,dx) : (selfState?.angle ?? 0);
+    } else {
+      angle = Math.atan2(mouseY - canvas.height/2, mouseX - canvas.width/2);
+    }
+    socket.emit('input', { angle, boosting });
+  }, 33);
+}
+
+function setStatus(msg) {
+  document.getElementById('status-bar').textContent = msg;
+}
+
+// ---- START / RESTART ----
+document.getElementById('start-btn').addEventListener('click', () => {
+  playerName = document.getElementById('player-name').value.trim() || 'Spieler';
+  const serverUrl = document.getElementById('server-url').value.trim();
+  if (!serverUrl) { setStatus('⚠ Bitte Server URL eingeben!'); return; }
+  connect(serverUrl, playerName, playerColor, playerColorDark);
+});
+
+document.getElementById('restart-btn').addEventListener('click', () => {
+  document.getElementById('death-overlay').classList.remove('show');
+  if (socket && socket.connected) {
+    socket.emit('respawn', { name: playerName, color: playerColor, colorDark: playerColorDark });
+    gameRunning = true;
+  }
+});
+
+// ---- DRAW ----
+function drawGrid() {
+  ctx.strokeStyle = 'rgba(0,255,136,0.04)';
+  ctx.lineWidth = 1;
+  const gs = 80;
+  const sx = -camera.x % gs, sy = -camera.y % gs;
+  ctx.beginPath();
+  for(let x=sx; x<canvas.width; x+=gs){ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);}
+  for(let y=sy; y<canvas.height; y+=gs){ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);}
+  ctx.stroke();
+}
+
+function drawBorder() {
+  ctx.strokeStyle = '#00ff88';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(-camera.x, -camera.y, WORLD_W, WORLD_H);
+}
+
+function drawFood(f) {
+  const sx = f.x - camera.x, sy = f.y - camera.y;
+  if(sx<-20||sx>canvas.width+20||sy<-20||sy>canvas.height+20) return;
+  ctx.beginPath();
+  ctx.arc(sx, sy, f.r, 0, Math.PI*2);
+  ctx.fillStyle = f.color;
+  ctx.fill();
+}
+
+function drawSnake(segs, angle, color, colorDark, name, isMe) {
+  if(!segs||segs.length===0) return;
+  const len = segs.length;
+  for(let i=len-1; i>=0; i--) {
+    const seg = segs[i];
+    const sx = seg.x - camera.x, sy = seg.y - camera.y;
+    if(sx<-30||sx>canvas.width+30||sy<-30||sy>canvas.height+30) continue;
+    const t = i/len;
+    const r = SEGMENT_RADIUS * (1 - t*0.35);
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI*2);
+    ctx.fillStyle = i%3===0 ? colorDark : color;
+    ctx.fill();
+  }
+  const head = segs[0];
+  const hx = head.x - camera.x, hy = head.y - camera.y;
+  const eyeOff = SEGMENT_RADIUS*0.5, eyeR = SEGMENT_RADIUS*0.28;
+  const perp = angle + Math.PI/2;
+  const ex1 = hx+Math.cos(perp)*eyeOff+Math.cos(angle)*eyeOff;
+  const ey1 = hy+Math.sin(perp)*eyeOff+Math.sin(angle)*eyeOff;
+  const ex2 = hx-Math.cos(perp)*eyeOff+Math.cos(angle)*eyeOff;
+  const ey2 = hy-Math.sin(perp)*eyeOff+Math.sin(angle)*eyeOff;
+  ctx.fillStyle='white';
+  ctx.beginPath();ctx.arc(ex1,ey1,eyeR,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(ex2,ey2,eyeR,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#111';
+  ctx.beginPath();ctx.arc(ex1+Math.cos(angle)*eyeR*0.4,ey1+Math.sin(angle)*eyeR*0.4,eyeR*0.55,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(ex2+Math.cos(angle)*eyeR*0.4,ey2+Math.sin(angle)*eyeR*0.4,eyeR*0.55,0,Math.PI*2);ctx.fill();
+
+  if(!isMe) {
+    ctx.font='11px Share Tech Mono'; ctx.textAlign='center';
+    ctx.fillStyle='rgba(255,255,255,0.6)';
+    ctx.fillText(name, hx, hy - SEGMENT_RADIUS*2 - 4);
+  }
+}
+
+function drawMinimap() {
+  const mw=140,mh=140,mx=canvas.width-160,my=canvas.height-160;
+  ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(mx,my,mw,mh);
+  ctx.strokeStyle='rgba(0,255,136,0.3)';ctx.lineWidth=1;ctx.strokeRect(mx,my,mw,mh);
+  ctx.fillStyle='rgba(255,255,255,0.1)';
+  for(const f of foods){
+    const fx=mx+(f.x/WORLD_W)*mw, fy=my+(f.y/WORLD_H)*mh;
+    ctx.fillRect(fx-0.5,fy-0.5,1,1);
+  }
+  for(const o of others){
+    if(!o.segments||!o.segments[0]) continue;
+    ctx.beginPath();ctx.arc(mx+(o.segments[0].x/WORLD_W)*mw,my+(o.segments[0].y/WORLD_H)*mh,2,0,Math.PI*2);
+    ctx.fillStyle=o.color;ctx.fill();
+  }
+  if(selfState&&selfState.alive&&selfState.segments[0]){
+    ctx.beginPath();ctx.arc(mx+(selfState.segments[0].x/WORLD_W)*mw,my+(selfState.segments[0].y/WORLD_H)*mh,3,0,Math.PI*2);
+    ctx.fillStyle='#fff';ctx.fill();
+  }
+  ctx.fillStyle='rgba(255,255,255,0.15)';ctx.font='9px Share Tech Mono';ctx.textAlign='left';
+  ctx.fillText('KARTE',mx+4,my+11);
+}
+
+function drawBoostBar() {
+  if(!selfState) return;
+  const bw=200,bh=6,bx=(canvas.width-bw)/2,by=canvas.height-30;
+  ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(bx-1,by-1,bw+2,bh+2);
+  const pct=(selfState.boostEnergy||0)/100;
+  const grd=ctx.createLinearGradient(bx,0,bx+bw,0);
+  grd.addColorStop(0,'#ffdd00');grd.addColorStop(1,'#ff8844');
+  ctx.fillStyle=grd;ctx.fillRect(bx,by,bw*pct,bh);
+  ctx.fillStyle='rgba(255,255,255,0.2)';ctx.font='9px Share Tech Mono';ctx.textAlign='center';
+  ctx.fillText('BOOST',canvas.width/2,by-4);
+}
+
+function updateLeaderboard() {
+  const lb = document.getElementById('lb-list');
+  lb.innerHTML = leaderboard.map((e,i) => {
+    const isMe = socket && e.id === socket.id;
+    return `<div class="lb-entry${isMe?' me':''}">
+      <span class="lb-rank">${i+1}</span>
+      <span class="lb-name">${isMe?'▶ ':''} ${e.name}</span>
+      <span class="lb-score">${e.score}</span>
+    </div>`;
+  }).join('');
+}
+
+// ---- LOOP ----
+function loop() {
+  animId = requestAnimationFrame(loop);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#050a0f';ctx.fillRect(0,0,canvas.width,canvas.height);
+  drawGrid();
+
+  if(!gameRunning||!selfState) return;
+
+  if(selfState.alive) {
+    const targetZoom = Math.max(0.18, 1.0-(selfState.segments.length/180));
+    zoom += (targetZoom-zoom)*0.04;
+  }
+
+  ctx.save();
+  ctx.translate(canvas.width/2,canvas.height/2);
+  ctx.scale(zoom,zoom);
+  ctx.translate(-canvas.width/2,-canvas.height/2);
+
+  drawBorder();
+  for(const f of foods) drawFood(f);
+  for(const o of others) drawSnake(o.segments,o.angle,o.color,o.colorDark,o.name,false);
+  if(selfState.alive) drawSnake(selfState.segments,selfState.angle,playerColor,playerColorDark,playerName,true);
+
+  ctx.restore();
+
+  drawMinimap();
+  drawBoostBar();
+
+  if(frameCount%10===0) {
+    document.getElementById('score-value').textContent = selfState.score||0;
+    const be = selfState.boostEnergy||0;
+    document.getElementById('boost-ind').style.opacity = be>20?'0.8':'0.2';
+    document.getElementById('boost-ind').textContent = be>20?'BOOST BEREIT':'BOOST LÄDT...';
+  }
+  if(frameCount%120===0) updateLeaderboard();
+  frameCount++;
+}
+
+loop();
+</script>
+</body>
+</html>
